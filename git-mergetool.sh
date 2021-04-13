@@ -242,8 +242,10 @@ checkout_staged_file () {
 hide_resolved () {
 	git merge-file --ours -q -p "$LOCAL" "$BASE" "$REMOTE" >"$LCONFL"
 	git merge-file --theirs -q -p "$LOCAL" "$BASE" "$REMOTE" >"$RCONFL"
+	git merge-file --base -q -p "$LOCAL" "$BASE" "$REMOTE" >"$BCONFL"
 	mv -- "$LCONFL" "$LOCAL"
 	mv -- "$RCONFL" "$REMOTE"
+	mv -- "$BCONFL" "$BASE"
 }
 
 merge_file () {
@@ -288,6 +290,7 @@ merge_file () {
 	LCONFL="$MERGETOOL_TMPDIR/${BASE}_LOCAL_LCONFL_$$$ext"
 	REMOTE="$MERGETOOL_TMPDIR/${BASE}_REMOTE_$$$ext"
 	RCONFL="$MERGETOOL_TMPDIR/${BASE}_REMOTE_RCONFL_$$$ext"
+	BCONFL="$MERGETOOL_TMPDIR/${BASE}_BASE_BCONFL_$$$ext"
 	BASE="$MERGETOOL_TMPDIR/${BASE}_BASE_$$$ext"
 
 	base_mode= local_mode= remote_mode=
