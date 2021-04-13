@@ -40,6 +40,8 @@ int cmd_merge_file(int argc, const char **argv, const char *prefix)
 			    XDL_MERGE_FAVOR_THEIRS),
 		OPT_SET_INT(0, "union", &xmp.favor, N_("for conflicts, use a union version"),
 			    XDL_MERGE_FAVOR_UNION),
+		OPT_SET_INT(0, "base", &xmp.favor, N_("for conflicts, use base version"),
+			    XDL_MERGE_FAVOR_BASE),
 		OPT_INTEGER(0, "marker-size", &xmp.marker_size,
 			    N_("for conflicts, use this marker size")),
 		OPT__QUIET(&quiet, N_("do not warn about conflicts")),

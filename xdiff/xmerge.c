@@ -29,6 +29,8 @@ typedef struct s_xdmerge {
 	 * 1 = no conflict, take first,
 	 * 2 = no conflict, take second.
 	 * 3 = no conflict, take both.
+	 * 4 = no conflict, take preimage.
+	 * 8 = no conflict, ???
 	 */
 	int mode;
 	/*
@@ -313,6 +315,16 @@ static int xdl_fill_merge_buffer(xdfenv_t *xe1, const char *name1,
 			if (m->mode & 2)
 				size += xdl_recs_copy(xe2, m->i2, m->chg2, 0, 0,
 						      dest ? dest + size : NULL);
+		} else if (m->mode & 4) {
+			/* Before conflicting part */
+			size += xdl_recs_copy(xe1, i, m->i1 - i, 0, 0,
+					      dest ? dest + size : NULL);
+
+			int needs_cr = is_cr_needed(xe1, xe2, m);
+
+			/* Shared preimage */
+			size += xdl_orig_copy(xe1, m->i0, m->chg0, needs_cr, 1,
+					dest ? dest + size : NULL);
 		} else
 			continue;
 		i = m->i1 + m->chg1;
@@ -364,7 +376,7 @@ static int xdl_refine_conflicts(xdfenv_t *xe1, xdfenv_t *xe2, xdmerge_t *m,
 		if (!xscr) {
 			/* If this happens, the changes are identical. */
 			xdl_free_env(&xe);
-			m->mode = 4;
+			m->mode = 8;
 			continue;
 		}
 		x = xscr;
