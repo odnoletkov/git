@@ -452,6 +452,7 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
 	int keep_unreachable = 0;
 	struct string_list keep_pack_list = STRING_LIST_INIT_NODUP;
 	int no_update_server_info = 0;
+	int no_prune_packed = 0;
 	struct pack_objects_args po_args = {NULL};
 	int geometric_factor = 0;
 
@@ -469,6 +470,8 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
 				N_("pass --no-reuse-object to git-pack-objects")),
 		OPT_BOOL('n', NULL, &no_update_server_info,
 				N_("do not run git-update-server-info")),
+		OPT_BOOL(0, "no-prune-packed", &no_prune_packed,
+				N_("do not run git-prune-packed")),
 		OPT__QUIET(&po_args.quiet, N_("be quiet")),
 		OPT_BOOL('l', "local", &po_args.local,
 				N_("pass --local to git-pack-objects")),
@@ -707,7 +710,8 @@ int cmd_repack(int argc, const char **argv, const char *prefix)
 		}
 		if (!po_args.quiet && isatty(2))
 			opts |= PRUNE_PACKED_VERBOSE;
-		prune_packed_objects(opts);
+		if (!no_prune_packed)
+			prune_packed_objects(opts);
 
 		if (!keep_unreachable &&
 		    (!(pack_everything & LOOSEN_UNREACHABLE) ||

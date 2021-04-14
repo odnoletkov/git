@@ -86,6 +86,11 @@ to the new separate pack will be written.
 	this repository (or a direct copy of it)
 	over HTTP or FTP.  See linkgit:git-update-server-info[1].
 
+--no-prune-packed::
+	Only useful with `-d`.  Do not remove redundant loose object
+	files by skipping the execution of `git prune-packed`.
+	See linkgit:git-prune-packed[1].
+
 --window=<n>::
 --depth=<n>::
 	These two options affect how the objects contained in the pack are
