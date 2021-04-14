@@ -128,12 +128,7 @@ test_expect_success 'packed unreachable obs in alternate ODB are not loosened' '
 	git reset --hard HEAD^ &&
 	test_tick &&
 	git reflog expire --expire=$test_tick --expire-unreachable=$test_tick --all &&
-	# The pack-objects call on the next line is equivalent to
-	# git repack -A -d without the call to prune-packed
-	git pack-objects --honor-pack-keep --non-empty --all --reflog \
-	    --unpack-unreachable </dev/null pack &&
-	rm -f .git/objects/pack/* &&
-	mv pack-* .git/objects/pack/ &&
+	git repack -A -d --no-prune-packed &&
 	git verify-pack -v -- .git/objects/pack/*.idx >packlist &&
 	! grep "^$coid " packlist &&
 	echo >.git/objects/info/alternates &&
@@ -145,16 +140,20 @@ test_expect_success 'local packed unreachable obs that exist in alternate ODB ar
 	echo "$coid" | git pack-objects --non-empty --all --reflog pack &&
 	rm -f .git/objects/pack/* &&
 	mv pack-* .git/objects/pack/ &&
-	# The pack-objects call on the next line is equivalent to
-	# git repack -A -d without the call to prune-packed
-	git pack-objects --honor-pack-keep --non-empty --all --reflog \
-	    --unpack-unreachable </dev/null pack &&
-	rm -f .git/objects/pack/* &&
-	mv pack-* .git/objects/pack/ &&
+	git repack -A -d --no-prune-packed &&
 	git verify-pack -v -- .git/objects/pack/*.idx >packlist &&
 	! grep "^$coid " &&
 	echo >.git/objects/info/alternates &&
 	test_must_fail git show $coid
+'
+
+test_expect_success '-A -d and --no-prune-packed do not remove loose objects' '
+	test_create_repo repo &&
+	test_when_finished "rm -rf repo" &&
+	test_commit -C repo commit &&
+	git -C repo repack -A -d --no-prune-packed &&
+	git -C repo count-objects -v >out &&
+	grep "^prune-packable: 3" out
 '
 
 test_expect_success 'objects made unreachable by grafts only are kept' '

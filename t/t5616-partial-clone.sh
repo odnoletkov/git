@@ -548,6 +548,15 @@ test_expect_success 'fetch from a partial clone, protocol v2' '
 	grep "version 2" trace
 '
 
+test_expect_success 'repack does not loose all objects' '
+	rm -rf client &&
+	git clone --bare --filter=blob:none "file://$(pwd)/srv.bare" client &&
+	test_when_finished "rm -rf client" &&
+	git -C client repack -A -l -d --no-prune-packed &&
+	git -C client count-objects -v >object-count &&
+	grep "^prune-packable: 0" object-count
+'
+
 . "$TEST_DIRECTORY"/lib-httpd.sh
 start_httpd
 
