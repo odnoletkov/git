@@ -55,18 +55,27 @@
 	"\x6f\xe1\x41\xf7\x74\x91\x20\xa3\x03\x72" \
 	"\x18\x13"
 
-const struct object_id null_oid;
 static const struct object_id empty_tree_oid = {
-	EMPTY_TREE_SHA1_BIN_LITERAL
+	EMPTY_TREE_SHA1_BIN_LITERAL,
+	GIT_HASH_SHA1,
 };
 static const struct object_id empty_blob_oid = {
-	EMPTY_BLOB_SHA1_BIN_LITERAL
+	EMPTY_BLOB_SHA1_BIN_LITERAL,
+	GIT_HASH_SHA1,
+};
+static const struct object_id null_oid_sha1 = {
+	{0}, GIT_HASH_SHA1,
 };
 static const struct object_id empty_tree_oid_sha256 = {
-	EMPTY_TREE_SHA256_BIN_LITERAL
+	EMPTY_TREE_SHA256_BIN_LITERAL,
+	GIT_HASH_SHA256,
 };
 static const struct object_id empty_blob_oid_sha256 = {
-	EMPTY_BLOB_SHA256_BIN_LITERAL
+	EMPTY_BLOB_SHA256_BIN_LITERAL,
+	GIT_HASH_SHA256,
+};
+static const struct object_id null_oid_sha256 = {
+	{0}, GIT_HASH_SHA256,
 };
 
 static void git_hash_sha1_init(git_hash_ctx *ctx)
@@ -87,6 +96,13 @@ static void git_hash_sha1_update(git_hash_ctx *ctx, const void *data, size_t len
 static void git_hash_sha1_final(unsigned char *hash, git_hash_ctx *ctx)
 {
 	git_SHA1_Final(hash, &ctx->sha1);
+}
+
+static void git_hash_sha1_final_oid(struct object_id *oid, git_hash_ctx *ctx)
+{
+	git_SHA1_Final(oid->hash, &ctx->sha1);
+	memset(oid->hash + GIT_SHA1_RAWSZ, 0, GIT_MAX_RAWSZ - GIT_SHA1_RAWSZ);
+	oid->algo = GIT_HASH_SHA1;
 }
 
 
@@ -110,6 +126,17 @@ static void git_hash_sha256_final(unsigned char *hash, git_hash_ctx *ctx)
 	git_SHA256_Final(hash, &ctx->sha256);
 }
 
+static void git_hash_sha256_final_oid(struct object_id *oid, git_hash_ctx *ctx)
+{
+	git_SHA256_Final(oid->hash, &ctx->sha256);
+	/*
+	 * This currently does nothing, so the compiler should optimize it out,
+	 * but keep it in case we extend the hash size again.
+	 */
+	memset(oid->hash + GIT_SHA256_RAWSZ, 0, GIT_MAX_RAWSZ - GIT_SHA256_RAWSZ);
+	oid->algo = GIT_HASH_SHA256;
+}
+
 static void git_hash_unknown_init(git_hash_ctx *ctx)
 {
 	BUG("trying to init unknown hash");
@@ -130,6 +157,12 @@ static void git_hash_unknown_final(unsigned char *hash, git_hash_ctx *ctx)
 	BUG("trying to finalize unknown hash");
 }
 
+static void git_hash_unknown_final_oid(struct object_id *oid, git_hash_ctx *ctx)
+{
+	BUG("trying to finalize unknown hash");
+}
+
+
 const struct git_hash_algo hash_algos[GIT_HASH_NALGOS] = {
 	{
 		NULL,
@@ -141,6 +174,8 @@ const struct git_hash_algo hash_algos[GIT_HASH_NALGOS] = {
 		git_hash_unknown_clone,
 		git_hash_unknown_update,
 		git_hash_unknown_final,
+		git_hash_unknown_final_oid,
+		NULL,
 		NULL,
 		NULL,
 	},
@@ -155,8 +190,10 @@ const struct git_hash_algo hash_algos[GIT_HASH_NALGOS] = {
 		git_hash_sha1_clone,
 		git_hash_sha1_update,
 		git_hash_sha1_final,
+		git_hash_sha1_final_oid,
 		&empty_tree_oid,
 		&empty_blob_oid,
+		&null_oid_sha1,
 	},
 	{
 		"sha256",
@@ -169,10 +206,17 @@ const struct git_hash_algo hash_algos[GIT_HASH_NALGOS] = {
 		git_hash_sha256_clone,
 		git_hash_sha256_update,
 		git_hash_sha256_final,
+		git_hash_sha256_final_oid,
 		&empty_tree_oid_sha256,
 		&empty_blob_oid_sha256,
+		&null_oid_sha256,
 	}
 };
+
+const struct object_id *null_oid(void)
+{
+	return the_hash_algo->null_oid;
+}
 
 const char *empty_tree_oid_hex(void)
 {
@@ -1031,7 +1075,14 @@ int check_object_signature(struct repository *r, const struct object_id *oid,
 			break;
 		r->hash_algo->update_fn(&c, buf, readlen);
 	}
+	r->hash_algo->final_oid_fn(real_oid, &c);
+/*
+	||||||| 89b43f80a5
+	r->hash_algo->final_fn(real_oid.hash, &c);
+	=======
 	r->hash_algo->final_fn(real_oid->hash, &c);
+	>>>>>>> ab/fsck-unexpected-type
+*/
 	close_istream(st);
 	return !oideq(oid, real_oid) ? -1 : 0;
 }
@@ -1724,7 +1775,7 @@ static void write_object_file_prepare(const struct git_hash_algo *algo,
 	algo->init_fn(&c);
 	algo->update_fn(&c, hdr, *hdrlen);
 	algo->update_fn(&c, buf, len);
-	algo->final_fn(oid->hash, &c);
+	algo->final_oid_fn(oid, &c);
 }
 
 /*
@@ -1896,7 +1947,7 @@ static int write_loose_object(const struct object_id *oid, char *hdr,
 	if (ret != Z_OK)
 		die(_("deflateEnd on object %s failed (%d)"), oid_to_hex(oid),
 		    ret);
-	the_hash_algo->final_fn(parano_oid.hash, &c);
+	the_hash_algo->final_oid_fn(&parano_oid, &c);
 	if (!oideq(oid, &parano_oid))
 		die(_("confused by unstable object source data for %s"),
 		    oid_to_hex(oid));
@@ -1952,17 +2003,29 @@ int hash_object_file_literally(const void *buf, unsigned long len,
 			       const char *type, struct object_id *oid,
 			       unsigned flags)
 {
+	return hash_object_file_literally_algop(buf, len, type, oid, flags,
+						the_hash_algo);
+}
+
+int hash_object_file_literally_algop(const void *buf, unsigned long len,
+				     const char *type, struct object_id *oid,
+				     unsigned flags,
+				     const struct git_hash_algo *algo)
+{
 	char *header;
 	int hdrlen, status = 0;
 
 	/* type string, SP, %lu of the length plus NUL must fit this */
 	hdrlen = strlen(type) + MAX_HEADER_LEN;
 	header = xmalloc(hdrlen);
-	write_object_file_prepare(the_hash_algo, buf, len, type, oid, header,
-				  &hdrlen);
+	write_object_file_prepare(algo, buf, len, type, oid, header, &hdrlen);
 
 	if (!(flags & HASH_WRITE_OBJECT))
 		goto cleanup;
+	if (algo->format_id != the_hash_algo->format_id) {
+		status = -1;
+		goto cleanup;
+	}
 	if (freshen_packed_object(oid) || freshen_loose_object(oid))
 		goto cleanup;
 	status = write_loose_object(oid, header, hdrlen, buf, len, 0);
@@ -2309,6 +2372,7 @@ int for_each_file_in_obj_subdir(unsigned int subdir_nr,
 		if (namelen == the_hash_algo->hexsz - 2 &&
 		    !hex_to_bytes(oid.hash + 1, de->d_name,
 				  the_hash_algo->rawsz - 1)) {
+			oid_pad_buffer(&oid, the_hash_algo);
 			if (obj_cb) {
 				r = obj_cb(&oid, path->buf, data);
 				if (r)
@@ -2477,7 +2541,7 @@ static int check_stream_oid(git_zstream *stream,
 		return -1;
 	}
 
-	the_hash_algo->final_fn(real_oid.hash, &c);
+	the_hash_algo->final_oid_fn(&real_oid, &c);
 	if (!oideq(expected_oid, &real_oid)) {
 		error(_("hash mismatch for %s (expected %s)"), path,
 		      oid_to_hex(expected_oid));
@@ -2534,7 +2598,7 @@ int read_loose_object(const char *path,
 		}
 		if (check_object_signature(the_repository, expected_oid,
 					   *contents, *size, oi->type_name->buf, real_oid)) {
-			if (oideq(real_oid, &null_oid))
+			if (oideq(real_oid, null_oid()))
 				BUG("should only get OID mismatch errors with mapped contents");
 			free(*contents);
 			goto out;
