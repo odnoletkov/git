@@ -251,10 +251,10 @@ static int reftable_ref_iterator_advance(struct ref_iterator *ref_iterator)
 		ri->base.flags = 0;
 		switch (ri->ref.value_type) {
 		case REFTABLE_REF_VAL1:
-			hashcpy(ri->oid.hash, ri->ref.value.val1);
+			oidread(&ri->oid, ri->ref.value.val1);
 			break;
 		case REFTABLE_REF_VAL2:
-			hashcpy(ri->oid.hash, ri->ref.value.val2.value);
+			oidread(&ri->oid, ri->ref.value.val2.value);
 			break;
 		case REFTABLE_REF_SYMREF: {
 			int out_flags = 0;
@@ -299,7 +299,7 @@ static int reftable_ref_iterator_peel(struct ref_iterator *ref_iterator,
 	struct git_reftable_iterator *ri =
 		(struct git_reftable_iterator *)ref_iterator;
 	if (ri->ref.value_type == REFTABLE_REF_VAL2) {
-		hashcpy(peeled->hash, ri->ref.value.val2.target_value);
+		oidread(peeled, ri->ref.value.val2.target_value);
 		return 0;
 	}
 
@@ -977,7 +977,7 @@ git_reftable_reflog_ref_iterator_advance(struct ref_iterator *ref_iterator)
 
 		free(ri->last_name);
 		ri->last_name = xstrdup(ri->log.refname);
-		hashcpy(ri->oid.hash, ri->log.update.new_hash);
+		oidread(&ri->oid, ri->log.update.new_hash);
 		return ITER_OK;
 	}
 }
@@ -1090,8 +1090,8 @@ static int git_reftable_for_each_reflog_ent_newest_first(
 			break;
 		}
 
-		hashcpy(old_oid.hash, log.update.old_hash);
-		hashcpy(new_oid.hash, log.update.new_hash);
+		oidread(&old_oid, log.update.old_hash);
+		oidread(&new_oid, log.update.new_hash);
 
 		full_committer = fmt_ident(log.update.name, log.update.email,
 					   WANT_COMMITTER_IDENT,
@@ -1157,8 +1157,8 @@ static int git_reftable_for_each_reflog_ent_oldest_first(
 		struct object_id new_oid;
 		const char *full_committer = "";
 
-		hashcpy(old_oid.hash, log->update.old_hash);
-		hashcpy(new_oid.hash, log->update.new_hash);
+		oidread(&old_oid, log->update.old_hash);
+		oidread(&new_oid, log->update.new_hash);
 
 		full_committer = fmt_ident(log->update.name, log->update.email,
 					   WANT_COMMITTER_IDENT, NULL,
@@ -1330,8 +1330,8 @@ git_reftable_reflog_expire(struct ref_store *ref_store, const char *refname,
 		if (err > 0 || strcmp(log.refname, refname)) {
 			break;
 		}
-		hashcpy(ooid.hash, log.update.old_hash);
-		hashcpy(noid.hash, log.update.new_hash);
+		oidread(&ooid, log.update.old_hash);
+		oidread(&noid, log.update.new_hash);
 
 		if (should_prune_fn(&ooid, &noid, log.update.email,
 				    (timestamp_t)log.update.time,
@@ -1410,7 +1410,7 @@ static int git_reftable_read_raw_ref(struct ref_store *ref_store,
 		strbuf_addstr(referent, ref.value.symref);
 		*type |= REF_ISSYMREF;
 	} else if (reftable_ref_record_val1(&ref) != NULL) {
-		hashcpy(oid->hash, reftable_ref_record_val1(&ref));
+		oidread(oid, reftable_ref_record_val1(&ref));
 	} else {
 		*type |= REF_ISBROKEN;
 		errno = EINVAL;
